@@ -1,0 +1,7 @@
+{
+  "event_type": "job_completed",
+  "occurred_at": "2026-06-21T18:20:00Z",
+  "shop": { "id": 88, "name": "Main St Auto" },
+  "repair_order": { "id": 1042, "number": "1042" },
+  "data": { "job_name": "Front brake pads & rotors", "technician": "Mike" }
+}

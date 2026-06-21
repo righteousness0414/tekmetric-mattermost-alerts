@@ -1,0 +1,7 @@
+{
+  "event_type": "tech_note_added",
+  "occurred_at": "2026-06-21T18:06:00Z",
+  "shop": { "id": 88, "name": "Main St Auto" },
+  "repair_order": { "id": 1042, "number": "1042" },
+  "data": { "author": "Mike", "note": "Right front brake pads at 2mm, rotor needs replacement." }
+}

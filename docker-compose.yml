@@ -1,0 +1,55 @@
+# Local-only PoC stack: n8n (workflow engine) + Mattermost (chat).
+# No external SaaS, no paid APIs. Everything runs on your machine.
+services:
+  # ----------------------------------------------------------------------------
+  # Mattermost — the chat tool the shop sees. mattermost-preview ships with its
+  # own database, so it runs standalone with zero extra config. Ideal for a PoC.
+  #
+  # platform: linux/amd64 — this image has no arm64 build, so on Apple Silicon
+  # it runs under emulation (works fine; just a bit slower to boot). On amd64
+  # hosts the platform pin is a harmless no-op.
+  # ----------------------------------------------------------------------------
+  mattermost:
+    image: mattermost/mattermost-preview:latest
+    platform: linux/amd64
+    container_name: tmm-mattermost
+    ports:
+      - "8065:8065"
+    restart: unless-stopped
+
+  # ----------------------------------------------------------------------------
+  # n8n — receives the Tekmetric webhook, normalizes it, branches per event,
+  # builds an emoji/colored message, and POSTs it to the Mattermost webhook.
+  # ----------------------------------------------------------------------------
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: tmm-n8n
+    ports:
+      - "5678:5678"
+    environment:
+      # Open it plainly over http://localhost — this is a local PoC.
+      - N8N_SECURE_COOKIE=false
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678/
+      - GENERIC_TIMEZONE=UTC
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_RUNNERS_ENABLED=true
+      # Allow workflow expressions to read process env (we keep the Mattermost
+      # URL there). This is the single source of the outbound URL.
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      # >>> THE ONE PLACE the Mattermost Incoming Webhook URL lives. <<<
+      # Populated from the .env file written by scripts/setup_mattermost.sh.
+      # Uses the compose service name "mattermost" so n8n reaches it on the
+      # internal docker network (NOT localhost, which is n8n's own container).
+      - MATTERMOST_WEBHOOK_URL=${MATTERMOST_WEBHOOK_URL:-http://mattermost:8065/hooks/REPLACE_ME}
+    volumes:
+      # Persist the imported workflow across restarts.
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      - mattermost
+    restart: unless-stopped
+
+volumes:
+  n8n_data:

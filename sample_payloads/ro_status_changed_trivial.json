@@ -1,0 +1,7 @@
+{
+  "event_type": "ro_status_changed",
+  "occurred_at": "2026-06-21T18:05:00Z",
+  "shop": { "id": 88, "name": "Main St Auto" },
+  "repair_order": { "id": 1042, "number": "1042" },
+  "data": { "from_status": "Estimate", "to_status": "Awaiting Approval" }
+}

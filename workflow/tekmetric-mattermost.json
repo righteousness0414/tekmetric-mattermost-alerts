@@ -1,0 +1,320 @@
+{
+  "id": "tekmetricmm0001",
+  "name": "Tekmetric → Mattermost alerts (PoC)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tekmetric",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "node-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "tekmetric-poc-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// === NORMALIZE / MAP ========================================================\n// >>> THE ONLY LAYER YOU TOUCH TO GO LIVE. <<<\n// Maps the incoming (ASSUMED) Tekmetric payload -> our internal field names.\n// When the real Tekmetric webhook schema is known, change ONLY this node:\n// point each field below at the real path. Nothing downstream changes.\n//\n// n8n version note: the Webhook node may expose the POSTed JSON under\n// $json.body (most versions) OR directly on $json. We handle BOTH here so\n// this workflow is version-safe (verified against the live payload, not guessed).\nconst out = [];\nfor (const item of items) {\n  const root = (item.json && item.json.body) ? item.json.body : item.json;\n  const d    = (root && root.data) ? root.data : {};\n  const ro   = (root && root.repair_order) ? root.repair_order : {};\n  const shop = (root && root.shop) ? root.shop : {};\n  out.push({ json: {\n    event_type:    root.event_type || '',\n    ro_number:     ro.number || (ro.id != null ? String(ro.id) : '?'),\n    shop_name:     shop.name || '',\n    from_status:   d.from_status || '',\n    to_status:     d.to_status || '',\n    author:        d.author || '',\n    note:          d.note || '',\n    inspector:     d.inspector || '',\n    flagged_items: (d.flagged_items != null ? d.flagged_items : 0),\n    job_name:      d.job_name || '',\n    technician:    d.technician || '',\n  }});\n}\nreturn out;"
+      },
+      "id": "node-normalize",
+      "name": "Normalize / Map (edit here to go live)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "id": "cond-ro_status_changed",
+                    "leftValue": "={{ $json.event_type }}",
+                    "rightValue": "ro_status_changed",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ro_status_changed"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "id": "cond-tech_note_added",
+                    "leftValue": "={{ $json.event_type }}",
+                    "rightValue": "tech_note_added",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "tech_note_added"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "id": "cond-inspection_finished",
+                    "leftValue": "={{ $json.event_type }}",
+                    "rightValue": "inspection_finished",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "inspection_finished"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "id": "cond-job_completed",
+                    "leftValue": "={{ $json.event_type }}",
+                    "rightValue": "job_completed",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "job_completed"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-switch",
+      "name": "Switch by event_type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        480,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// === BUILD: ro_status_changed (MEDIUM importance, blue) =====================\n// >>> TRANSITION FILTER LIVES HERE <<<\n// Only notify on MAJOR transitions. Trivial moves are noise -> skipped by\n// returning no item (nothing flows on to Mattermost for those).\nconst MAJOR = ['In Progress', 'Completed'];\nconst out = [];\nfor (const item of items) {\n  const j = item.json;\n  if (!MAJOR.includes(j.to_status)) {\n    continue; // trivial transition -> skip, no notification\n  }\n  out.push({ json: {\n    channel: 'shop-floor',\n    username: 'Tekmetric Bot',\n    icon_emoji: ':wrench:',\n    text: '🔧 RO #' + j.ro_number + ' — status: ' + j.from_status + ' → ' + j.to_status,\n    attachments: [{ color: '#3498db', text: 'Status change · ' + j.shop_name }],\n  }});\n}\nreturn out;"
+      },
+      "id": "node-build-ro",
+      "name": "Build: ro_status_changed (+filter)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// === BUILD: tech_note_added (MEDIUM importance, blue) =======================\nconst out = [];\nfor (const item of items) {\n  const j = item.json;\n  out.push({ json: {\n    channel: 'shop-floor',\n    username: 'Tekmetric Bot',\n    icon_emoji: ':wrench:',\n    text: '📝 ' + j.author + ' added a note on RO #' + j.ro_number,\n    attachments: [{ color: '#3498db', text: j.note }],\n  }});\n}\nreturn out;"
+      },
+      "id": "node-build-note",
+      "name": "Build: tech_note_added",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// === BUILD: inspection_finished (HIGH importance, green) ====================\n// High-priority: a colored attachment that stands out. This directly triggers\n// \"a human should call the customer next\".\nconst out = [];\nfor (const item of items) {\n  const j = item.json;\n  out.push({ json: {\n    channel: 'shop-floor',\n    username: 'Tekmetric Bot',\n    icon_emoji: ':wrench:',\n    text: '✅ Inspection finished — RO #' + j.ro_number + ' (' + j.flagged_items + ' items flagged)',\n    attachments: [{\n      color: '#2ecc71',\n      title: '✅ Inspection finished — RO #' + j.ro_number,\n      text: j.flagged_items + ' item(s) flagged · by ' + j.inspector,\n    }],\n  }});\n}\nreturn out;"
+      },
+      "id": "node-build-inspection",
+      "name": "Build: inspection_finished",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// === BUILD: job_completed (HIGH importance, green) ==========================\nconst out = [];\nfor (const item of items) {\n  const j = item.json;\n  out.push({ json: {\n    channel: 'shop-floor',\n    username: 'Tekmetric Bot',\n    icon_emoji: ':checkered_flag:',\n    text: '🏁 Job completed — RO #' + j.ro_number + ' (\"' + j.job_name + '\")',\n    attachments: [{\n      color: '#2ecc71',\n      title: '🏁 Job completed — RO #' + j.ro_number,\n      text: '\"' + j.job_name + '\" · by ' + j.technician,\n    }],\n  }});\n}\nreturn out;"
+      },
+      "id": "node-build-job",
+      "name": "Build: job_completed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.MATTERMOST_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "node-http",
+      "name": "HTTP Request → Mattermost",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1020,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize / Map (edit here to go live)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize / Map (edit here to go live)": {
+      "main": [
+        [
+          {
+            "node": "Switch by event_type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch by event_type": {
+      "main": [
+        [
+          {
+            "node": "Build: ro_status_changed (+filter)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build: tech_note_added",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build: inspection_finished",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build: job_completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build: ro_status_changed (+filter)": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request → Mattermost",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build: tech_note_added": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request → Mattermost",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build: inspection_finished": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request → Mattermost",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build: job_completed": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request → Mattermost",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}
