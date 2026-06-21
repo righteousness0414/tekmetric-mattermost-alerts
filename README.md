@@ -12,6 +12,10 @@ paid APIs.
             you touch to go live                          attachments
 ```
 
+The actual n8n workflow:
+
+![n8n workflow](docs/n8n-workflow.png)
+
 ---
 
 ## ⚠️ Honest disclaimer (read this first)
@@ -104,6 +108,11 @@ at `http://localhost:5678/webhook/tekmetric`.
 
 ## Verification
 
+The 4 alerts as they land in Mattermost (`#shop-floor`, from **Tekmetric Bot** —
+note the green cards for the two high-priority events, blue for the routine ones):
+
+![Mattermost alerts](docs/mattermost-alerts.png)
+
 Run live on 2026-06-21 (macOS / Apple Silicon, Colima + Docker). All checks
 fired through the **active production webhook** and confirmed by reading the
 Mattermost channel back via its REST API:
@@ -160,6 +169,7 @@ Mattermost channel back via its REST API:
 ├── scripts/
 │   ├── setup_mattermost.sh             # API-only Mattermost setup → writes .env
 │   └── setup_n8n.sh                    # import + activate workflow
+├── docs/                               # screenshots used in this README
 └── fire.sh                             # fire events at n8n
 ```
 
