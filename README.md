@@ -6,6 +6,14 @@ channel — so the whole shop sees what's happening without opening Tekmetric.
 Everything runs **locally** (n8n + Mattermost in Docker); no external SaaS, no
 paid APIs.
 
+**See it in action** — firing the 4 sample events (`./fire.sh`) and watching
+them land in the `#shop-floor` channel in real time:
+
+![Tekmetric alerts streaming into the Mattermost Shop Floor channel](docs/shop-floor-demo.gif)
+
+▶ Higher-quality video: [`docs/shop-floor-demo.mp4`](docs/shop-floor-demo.mp4)
+(264 KB — best for sharing directly with the shop owner).
+
 ```
 [Webhook] → [Normalize/Map] → [Switch by event_type] → [Build message ×4] → [HTTP → Mattermost]
  trigger    the ONLY layer        4 branches (+filter)    emoji + colored          Incoming Webhook
